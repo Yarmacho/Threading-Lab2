@@ -53,7 +53,7 @@ namespace Lab2
             var results = new List<IAsyncResult<TResult>>();
             foreach (var argument in arguments)
             {
-                results.Add(EnqueueTask(action, argument));
+                results.Add(enqueueTask(action, argument));
             }
             resetEvent.Reset();
             execute(arguments.Length);
