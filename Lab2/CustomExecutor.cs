@@ -9,12 +9,29 @@ namespace Lab2
     {
         private readonly ConcurrentQueue<KeyValuePair<WorkerItem, AsyncResult<TResult>>> _tasks = new ConcurrentQueue<KeyValuePair<WorkerItem, AsyncResult<TResult>>>();
         private int _maxWorkers;
+
         private int _activeWorkers = 0;
+        private int ActiveWorkers
+        {
+            get => _activeWorkers;
+            set
+            {
+                _activeWorkers = value;
+                if (value == 0)
+                {
+                    resetEvent.Set();
+                }
+            }
+        }
+
         private object locker = new object();
+
+        private AutoResetEvent resetEvent;
 
         public CustomExecutor(int maxWorkers)
         {
             _maxWorkers = maxWorkers;
+            resetEvent = new AutoResetEvent(false);
         }
 
         /// <summary>
@@ -23,6 +40,7 @@ namespace Lab2
         public IAsyncResult<TResult> EnqueueTask(WorkerAction<TArgument, TResult> action, TArgument argument)
         {
             var result = enqueueTask(action, argument);
+            resetEvent.Reset();
             execute();
             return result;
         }
@@ -37,6 +55,7 @@ namespace Lab2
             {
                 results.Add(EnqueueTask(action, argument));
             }
+            resetEvent.Reset();
             execute(arguments.Length);
             return results;
         }
@@ -50,28 +69,25 @@ namespace Lab2
 
         public void ShutDown()
         {
-            while (_activeWorkers != 0)
-            {
-                Thread.Sleep(200);
-            }
+            resetEvent.WaitOne();
         }
 
         private void execute(int count = 1)
         {
             for (int i = 0; i < count; i++)
             {
-                if (_activeWorkers >= _maxWorkers)
+                if (ActiveWorkers >= _maxWorkers)
                 {
                     break;
                 }
 
-                _activeWorkers++;
+                ActiveWorkers++;
                 var worker = new Worker(_tasks);
                 worker.Executed += () =>
                 {
                     lock (locker)
                     {
-                        _activeWorkers--;
+                        ActiveWorkers--;
                     }
                 };
 
